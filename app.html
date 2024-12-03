@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastCode Planner</title>
+    <link rel="stylesheet" href="style.css"> <!-- Vinculo do arquivo CSS -->
+    <link rel="icon" type="image/png" href="logo1.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script> <!-- Biblioteca SheetJS -->
+</head>
+<body>
+    <div class="container">
+        <!-- Logo -->
+        <div class="logo">
+            <img src="logo.png" alt="Logo" class="logo-img">
+        </div>
+
+        <h1>FastCode Planner</h1>
+
+        <!-- Texto explicativo ajustado -->
+        <div class="intro-text">
+            <p>
+                Este programa foi desenvolvido para ajudar na criação de um plano de codificação inicial, baseado em dados de respostas fornecidas por um arquivo Excel. O objetivo é oferecer uma visão geral de uma forma mais rápida, facilitando o processo de criação dos planos.
+            </p>
+            <p><strong>Importante:</strong> Este sistema é projetado para processar <strong>perguntas simples</strong>, como aquelas que pedem por <strong>nomes de marcas, produtos ou entidades</strong>. Não é apropriado para perguntas <strong>complexas</strong>.</p>
+            <p><strong>Atenção:</strong> O plano gerado por este sistema não é definitivo e pode conter erros. Trata-se de uma sugestão inicial que deve sempre ser revisada e validada por uma análise humana.</p>
+            <p>
+                Para começar, basta fazer o upload de um arquivo Excel que contenha uma coluna chamada "Respostas". O sistema irá analisar as respostas e criar um arquivo de saída com um plano de codificação organizado e pronto para ser utilizado.
+            </p>
+        </div>
+
+        <!-- Formulário para upload de arquivo -->
+        <input type="file" id="fileInput" accept=".xlsx, .xls" />
+        <button onclick="processFile()">Carregar e Processar</button>
+
+        <div id="output"></div>
+
+    </div>
+    <div class="contato">
+        <h2>Contactos</h2>
+        <p>Se existir alguma dúvida sobre o funcionamento deste programa, deixo abaixo os meus contactos.</p>
+        <p><strong>Email:</strong> eduardo.parracho@boutique-research.pt</p>
+        <p><strong>Telemóvel:</strong> +351 965 811 017</p>
+    </div>
+
+    <!-- Rodapé -->
+    <footer class="footer">
+        <p>&copy; 2024 Eduardo Parracho. Todos os direitos reservados.</p>
+    </footer>
+
+    <script>
+        function processFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Por favor, selecione um arquivo!');
+                return;
+            }
+
+            // Usando a biblioteca SheetJS para ler o arquivo Excel
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                // Obter os dados da planilha
+                const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+                // Verificar se existe a coluna 'Respostas'
+                if (!jsonData.some(row => row['Respostas'])) {
+                    alert("A coluna 'Respostas' não foi encontrada.");
+                    return;
+                }
+
+                // Limpar e processar as respostas
+                const respostas = jsonData.map(row => row['Respostas']).filter(Boolean).map(limparResposta);
+
+                // Calcular frequências e marcas compostas
+                const todasAsPalavras = respostas.flat();
+                const contagemPalavras = contarFrequencias(todasAsPalavras);
+                const marcasCompostas = identificarMarcasCompostas(respostas);
+
+                // Filtrar as palavras que aparecem em pelo menos 2% das respostas
+                const totalRespostas = jsonData.length;
+                const limite2Porcento = Math.max(1, Math.round(totalRespostas * 0.02));
+
+                const marcasFiltradas = Object.fromEntries(
+                    Object.entries(contagemPalavras).filter(([_, freq]) => freq >= limite2Porcento)
+                );
+                const marcasCompostasFiltradas = Object.fromEntries(
+                    Object.entries(marcasCompostas).filter(([_, freq]) => freq >= limite2Porcento)
+                );
+
+                const todasMarcas = { ...marcasFiltradas, ...marcasCompostasFiltradas };
+
+                // Criar um arquivo de saída
+                const planoCodificacao = Object.entries(todasMarcas).map(([marca, freq], index) => ({
+                    'Marca': marca,
+                    'Frequência': freq,
+                    'Código': 10 + index
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(planoCodificacao);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Plano de Codificação");
+
+                // Salvar o arquivo Excel
+                XLSX.writeFile(wb, 'plano_codificacao.xlsx');
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Função para limpar resposta
+        function limparResposta(resposta) {
+            return resposta.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/);
+        }
+
+        // Função para contar frequências
+        function contarFrequencias(arr) {
+            return arr.reduce((acc, item) => {
+                acc[item] = (acc[item] || 0) + 1;
+                return acc;
+            }, {});
+        }
+
+        // Função para identificar marcas compostas
+        function identificarMarcasCompostas(respostas, n = 2) {
+            const nGrams = [];
+            respostas.forEach(resposta => {
+                for (let i = 0; i < resposta.length - n + 1; i++) {
+                    nGrams.push(resposta.slice(i, i + n).join(' '));
+                }
+            });
+            return contarFrequencias(nGrams);
+        }
+    </script>
+</body>
+</html>
